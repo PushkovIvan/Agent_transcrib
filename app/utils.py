@@ -53,14 +53,26 @@ def load_models():
 
 def generate_detailed_analysis_prompt(transcription_text):
     """Генерация промпта для анализа транскрипции"""
-    prompt = f"""  
+    try:
+        # Загружаем промпт из файла
+        prompt_path = os.path.join(os.path.dirname(__file__), '..', 'prompt.txt')
+        with open(prompt_path, 'r', encoding='utf-8') as f:
+            prompt_template = f.read()
+        
+        # Подставляем текст транскрипции
+        prompt = prompt_template.format(transcription_text=transcription_text)
+        return prompt
+    except Exception as e:
+        print(f"Ошибка при загрузке промпта: {str(e)}")
+        # Fallback к старому промпту
+        prompt = f"""  
 Обработай транскрипт рабочего совещания. Сначала попробуй определить участников по контексту (диаризация по наитию), группируя реплики по условным ролям или именам (например: "Иван", "Участник 1", "Менеджер проекта"). Затем выдели: 1) Основные темы/проблемы (кратко суть), 2) Поручения (что, кому/роли, сроки если есть), 3) Ключевые решения, 4) Важные детали (цифры, риски, контакты). Не используй markdown. Если списки - только текстовые обозначения типа "а)" или "-". Группируй информацию по смыслу. Структура ответа: сначала условные говорящие, затем остальные категории. Если диаризация невозможна - пропусти её и выдели только суть.
 
 Транскрипт:
 {transcription_text}  
 
 """ 
-    return prompt
+        return prompt
 
 def analyze_transcription(text):
     """Анализ транскрипции с помощью GigaChat"""
