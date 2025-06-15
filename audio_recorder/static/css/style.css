@@ -1,0 +1,105 @@
+body {
+    font-family: -apple-system, BlinkMacSystemFont, "San Francisco", Helvetica, Arial, sans-serif;
+    background-color: #f8f8f8;
+    color: #333;
+    margin: 0;
+    padding: 20px;
+}
+
+.container {
+    max-width: 800px;
+    margin: 0 auto;
+    padding: 25px;
+    background-color: white;
+    border-radius: 12px;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+}
+
+h1 {
+    color: #0066cc;
+    text-align: center;
+    font-weight: 500;
+}
+
+.recorder-container {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 15px;
+}
+
+.btn {
+    padding: 12px 24px;
+    border: none;
+    border-radius: 30px;
+    font-size: 16px;
+    cursor: pointer;
+    transition: all 0.2s;
+    font-weight: 500;
+}
+
+.btn:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+}
+
+.record {
+    background-color: #ff453a;
+    color: white;
+}
+
+.stop {
+    background-color: #30d158;
+    color: white;
+}
+
+.timer {
+    font-size: 28px;
+    font-family: 'SF Mono', Menlo, monospace;
+    font-weight: 600;
+}
+
+.status {
+    font-style: italic;
+    color: #666;
+}
+
+.disk-space {
+    color: #888;
+    font-size: 14px;
+}
+
+.recording-list {
+    width: 100%;
+    margin-top: 30px;
+    border-top: 1px solid #eee;
+    padding-top: 20px;
+}
+
+#recordingsList {
+    list-style-type: none;
+    padding: 0;
+}
+
+#recordingsList li {
+    padding: 12px 15px;
+    border-bottom: 1px solid #eee;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+#recordingsList li a {
+    color: #007aff;
+    text-decoration: none;
+    font-weight: 500;
+}
+
+#recordingsList li a:hover {
+    text-decoration: underline;
+}
+
+.file-size {
+    color: #888;
+    font-size: 13px;
+}
