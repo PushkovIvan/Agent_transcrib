@@ -7,7 +7,7 @@ from flask import Flask, render_template, request, jsonify, send_from_directory
 from utils import process_audio_transcription, create_docx_document
 
 app = Flask(__name__)
-app.config['UPLOAD_FOLDER'] = '../recordings'
+app.config['UPLOAD_FOLDER'] = os.path.join(os.path.dirname(__file__), '..', 'recordings')
 app.config['TEMP_FOLDER'] = 'temp'
 app.config['MAX_RECORDING_HOURS'] = 24
 app.config['FFMPEG_PATH'] = 'ffmpeg'  # Путь к ffmpeg (по умолчанию ищет в PATH)
@@ -15,6 +15,9 @@ app.config['FFMPEG_PATH'] = 'ffmpeg'  # Путь к ffmpeg (по умолчан�
 # Создаем необходимые директории
 os.makedirs(app.config['UPLOAD_FOLDER'], exist_ok=True)
 os.makedirs(app.config['TEMP_FOLDER'], exist_ok=True)
+
+print(f"📁 Папка для записей: {os.path.abspath(app.config['UPLOAD_FOLDER'])}")
+print(f"📁 Временная папка: {os.path.abspath(app.config['TEMP_FOLDER'])}")
 
 # Словарь для отслеживания статуса обработки
 processing_status = {}
@@ -116,12 +119,17 @@ def save_recording():
         if not all([temp_filename, filename]):
             return jsonify({'status': 'error', 'message': 'Missing filename parameters'}), 400
         
+        print(f"💾 Сохранение записи: {filename}")
+        print(f"📁 Временный файл: {temp_filename}")
+        
         # Сохраняем временный файл
         temp_path = os.path.join(app.config['TEMP_FOLDER'], temp_filename)
         audio_file.save(temp_path)
+        print(f"✅ Временный файл сохранен: {temp_path}")
         
         # Конвертируем в MP3
         output_path = os.path.join(app.config['UPLOAD_FOLDER'], filename)
+        print(f"🔄 Конвертация в MP3: {output_path}")
         
         try:
             ffmpeg_command = [
@@ -143,12 +151,15 @@ def save_recording():
             if result.returncode != 0:
                 raise Exception(f"FFmpeg error: {result.stderr.decode('utf-8')}")
             
+            print(f"✅ MP3 файл сохранен: {output_path}")
+            
         except subprocess.TimeoutExpired:
             raise Exception("FFmpeg conversion timeout")
         finally:
             # Всегда удаляем временный файл
             try:
                 os.remove(temp_path)
+                print(f"🗑️ Временный файл удален: {temp_path}")
             except:
                 pass
         
@@ -168,12 +179,14 @@ def save_recording():
         })
         
     except Exception as e:
+        print(f"❌ Ошибка при сохранении: {str(e)}")
         # В случае ошибки пробуем сохранить оригинальный файл как fallback
         error_filename = None
         try:
             error_filename = f"error_{datetime.now().strftime('%Y%m%d_%H%M%S')}.webm"
             error_path = os.path.join(app.config['UPLOAD_FOLDER'], error_filename)
             audio_file.save(error_path)
+            print(f"💾 Fallback файл сохранен: {error_path}")
         except:
             pass
         

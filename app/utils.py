@@ -204,7 +204,7 @@ def create_docx_document(transcription_text, analysis_text, filename):
         title.alignment = 1  # По центру
         
         # Информация о файле
-        doc.add_paragraph(f'Файл: {filename}')
+        doc.add_paragraph(f'Файл: {os.path.basename(filename)}')
         doc.add_paragraph(f'Дата создания: {datetime.now().strftime("%d.%m.%Y %H:%M:%S")}')
         doc.add_paragraph('')
         
@@ -217,11 +217,13 @@ def create_docx_document(transcription_text, analysis_text, filename):
             doc.add_heading('Анализ совещания', level=1)
             doc.add_paragraph(analysis_text)
         
-        # Сохранение документа
+        # Сохранение документа в папку recordings
+        recordings_dir = os.path.join(os.path.dirname(__file__), '..', 'recordings')
         doc_filename = f"transcription_{datetime.now().strftime('%Y%m%d_%H%M%S')}.docx"
-        doc_path = os.path.join(os.path.dirname(filename), doc_filename)
+        doc_path = os.path.join(recordings_dir, doc_filename)
         doc.save(doc_path)
         
+        print(f"Документ сохранен: {doc_path}")
         return doc_path
     except Exception as e:
         print(f"Ошибка при создании документа: {str(e)}")
