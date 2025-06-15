@@ -7,7 +7,7 @@ from flask import Flask, render_template, request, jsonify, send_from_directory
 from utils import process_audio_transcription, create_docx_document
 
 app = Flask(__name__)
-app.config['UPLOAD_FOLDER'] = 'recordings'
+app.config['UPLOAD_FOLDER'] = '../recordings'
 app.config['TEMP_FOLDER'] = 'temp'
 app.config['MAX_RECORDING_HOURS'] = 24
 app.config['FFMPEG_PATH'] = 'ffmpeg'  # Путь к ffmpeg (по умолчанию ищет в PATH)
@@ -205,7 +205,25 @@ def get_recording(filename):
 @app.route('/documents/<filename>')
 def get_document(filename):
     """Скачивание документа Word"""
-    return send_from_directory(app.config['UPLOAD_FOLDER'], filename)
+    try:
+        # Ищем документ в папке recordings
+        doc_filename = filename.replace('.mp3', '_transcription.docx')
+        doc_path = os.path.join(app.config['UPLOAD_FOLDER'], doc_filename)
+        
+        if os.path.exists(doc_path):
+            return send_from_directory(
+                app.config['UPLOAD_FOLDER'],
+                doc_filename,
+                as_attachment=True,
+                download_name=doc_filename
+            )
+        else:
+            return jsonify({'error': 'Document not found'}), 404
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
 
 if __name__ == '__main__':
-    app.run(debug=True, port=5000)
+    print("🌐 Запуск Flask приложения...")
+    print("Приложение будет доступно по адресу: http://127.0.0.1:5000")
+    print("Нажмите Ctrl+C для остановки")
+    app.run(debug=True, port=5000, host='127.0.0.1')

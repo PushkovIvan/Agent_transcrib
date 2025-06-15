@@ -92,7 +92,7 @@ def check_config():
 
 def create_directories():
     """Создание необходимых директорий"""
-    directories = ['recordings', 'temp']
+    directories = ['recordings', 'app/temp']
     
     for directory in directories:
         dir_path = os.path.join(os.path.dirname(__file__), directory)
@@ -147,10 +147,12 @@ def main():
         
         # Запуск приложения
         try:
+            import sys
+            sys.path.append(os.path.join(os.path.dirname(__file__), 'app'))
             from app import app
-            print("🌐 Приложение запущено на http://localhost:5000")
+            print("🌐 Приложение запущено на http://127.0.0.1:5000")
             print("Нажмите Ctrl+C для остановки")
-            app.run(debug=True, port=5000)
+            app.run(debug=True, port=5000, host='127.0.0.1')
         except KeyboardInterrupt:
             print("\n👋 Приложение остановлено")
         except Exception as e:

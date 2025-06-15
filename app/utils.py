@@ -16,7 +16,7 @@ from datetime import datetime
 
 # Загрузка конфигурации
 def get_config():
-    config_path = os.path.join(os.path.dirname(__file__), 'config.yaml')
+    config_path = os.path.join(os.path.dirname(__file__), '..', 'config.yaml')
     with open(config_path, encoding="utf-8") as f:
         config = yaml.safe_load(f)
     return config

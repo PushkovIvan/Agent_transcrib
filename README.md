@@ -33,11 +33,18 @@ sudo apt install ffmpeg
 
 3. Настройте конфигурацию:
    - Убедитесь, что файл `config.yaml` содержит правильный токен GigaChat
-   - При необходимости измените путь к ffmpeg в `app.py`
+   - При необходимости измените путь к ffmpeg в `app/app.py`
 
 ## Запуск
 
+### Способ 1: Автоматический запуск с проверками
 ```bash
+python start.py
+```
+
+### Способ 2: Прямой запуск Flask приложения
+```bash
+cd app
 python app.py
 ```
 
@@ -61,22 +68,23 @@ python app.py
 
 ```
 agent_transcrib/
-├── app.py                 # Основное Flask-приложение
-├── utils.py              # Вспомогательные функции для транскрибации
-├── start.py              # Скрипт запуска
-├── test_transcription.py # Тестовый скрипт
+├── start.py              # Скрипт запуска с проверками
 ├── config.py             # Загрузка конфигурации
 ├── config.yaml           # Конфигурационный файл
 ├── requirements.txt      # Зависимости Python
-├── templates/
-│   └── index.html       # HTML шаблон
-├── static/
-│   ├── css/
-│   │   └── style.css    # Стили
-│   └── js/
-│       └── script.js    # JavaScript код
+├── README.md            # Документация
 ├── recordings/          # Папка для сохранения записей
-└── temp/               # Временные файлы
+└── app/                 # Основное приложение
+    ├── app.py           # Flask приложение
+    ├── utils.py         # Вспомогательные функции
+    ├── templates/       # HTML шаблоны
+    │   └── index.html
+    ├── static/          # Статические файлы
+    │   ├── css/
+    │   │   └── style.css
+    │   └── js/
+    │       └── script.js
+    └── temp/            # Временные файлы
 ```
 
 ## Технологии
