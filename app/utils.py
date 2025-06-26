@@ -13,6 +13,15 @@ import yaml
 from docx import Document
 from docx.shared import Inches
 from datetime import datetime
+from pathlib import Path
+from pyannote.audio import Pipeline
+from collections import defaultdict
+from pyannote.core import Annotation, Segment
+
+# Конфигурация
+PATH_TO_CONFIG = "C:/Users/Huawei/Desktop/test_voice_assistant/backend/models/diarization_config.yaml"  # Замените на реальный путь до конфигурации диаризатора
+OUTPUT_RTTM = "result.rttm"  # Файл для результатов диаризации
+
 
 # Загрузка конфигурации
 def get_config():
@@ -28,7 +37,8 @@ giga = GigaChat(
     scope='GIGACHAT_API_CORP',
     credentials=CONFIG["token"]["gigachat"],
     verify_ssl_certs=False,
-    model="GigaChat-2-Max"
+    model="GigaChat-2-Max",
+    temperature=0.7
 )
 
 # Глобальные переменные для кэширования моделей
@@ -281,3 +291,182 @@ def process_audio_transcription(audio_path):
     except Exception as e:
         print(f"Ошибка при обработке аудио: {str(e)}")
         return None, None, str(e) 
+
+
+# Контекстный менеджер для временной смены директории
+class change_dir:
+    def __init__(self, path):
+        self.path = path
+        self.original = os.getcwd()
+    
+    def __enter__(self):
+        os.chdir(self.path)
+        
+    def __exit__(self, exc_type, exc_val, exc_tb):
+        os.chdir(self.original)
+
+def load_pipeline_from_pretrained(path_to_config: str | Path, device: str = None) -> Pipeline:
+    path_to_config = Path(path_to_config)
+    cd_to = path_to_config.parent.parent.resolve()  # Переходим в папку с моделями
+    
+    with change_dir(cd_to):
+        print(f"Загружаем пайплайн из {path_to_config}...")
+        if device:
+            pipeline = Pipeline.from_pretrained(path_to_config)
+        else:
+            pipeline = Pipeline.from_pretrained(path_to_config)
+    
+    return pipeline
+
+def diarization_pipeline(audio_file):
+    # Загружаем пайплайн (указываем устройство при необходимости)
+    pipeline = load_pipeline_from_pretrained(PATH_TO_CONFIG, device="cuda")
+
+    # Выполняем диаризацию
+    print(f"Обрабатываем {audio_file}...")
+    diarization = pipeline(audio_file)
+
+    # Сохраняем результаты в RTTM
+    with open(OUTPUT_RTTM, "w") as f:
+        diarization.write_rttm(f)
+
+    # Выводим результаты в консоль
+    print("\nРезультаты диаризации:")
+    audio_segments = ""
+    for segment, _, speaker in diarization.itertracks(yield_label=True):
+        segment_description = f"[{segment.start:.1f}s - {segment.end:.1f}s] {speaker}"
+        print(segment_description)
+        audio_segments += segment_description
+    return audio_segments
+
+# Загрузка RTTM-файла
+def load_rttm(rttm_path):
+    """Загружает RTTM-файл в объект Annotation"""
+    annotation = Annotation()
+    with open(rttm_path, 'r') as f:
+        for line in f:
+            parts = line.strip().split()
+            if len(parts) < 9:
+                continue
+            start = float(parts[3])
+            duration = float(parts[4])
+            end = start + duration
+            speaker = parts[7]
+            segment = Segment(start, end)
+            annotation[segment] = speaker
+    return annotation
+
+def transcription_with_diarization_pipeline(audio_path):
+
+    diarization_pipeline(audio_path)
+
+    # 1. Загрузка аудио и транскрипция
+    rttm_path = "result.rttm"     # Укажите путь к RTTM-файлу
+
+    # Загрузка аудио и преобразование в моно для Whisper
+    audio, sr = librosa.load(audio_path, sr=16000, mono=True)
+    sf.write("temp_mono.wav", audio, sr)  # Сохраняем моно-версию
+
+    # Транскрипция с помощью Whisper
+    model = whisper.load_model("large-v3")
+    result = model.transcribe("temp_mono.wav")
+    segments = result['segments']
+
+    # Загружаем диаризацию
+    diarization = load_rttm(rttm_path)
+
+    # 3. Сопоставление сегментов транскрипции с говорящими
+    final_result = []
+
+    for segment in segments:
+        seg_start = segment['start']
+        seg_end = segment['end']
+        seg_duration = seg_end - seg_start
+
+        # Собираем статистику по перекрывающимся сегментам диаризации
+        speaker_stats = defaultdict(float)
+
+        # ИСПРАВЛЕНИЕ: Правильный способ итерации по сегментам диаризации
+        for speech_turn in diarization.itertracks(yield_label=True):
+            segment_obj = speech_turn[0]  # Объект сегмента
+            speaker = speech_turn[2]      # Идентификатор говорящего
+
+            sp_start = segment_obj.start
+            sp_end = segment_obj.end
+
+            # Вычисляем пересечение сегментов
+            overlap_start = max(seg_start, sp_start)
+            overlap_end = min(seg_end, sp_end)
+            overlap_duration = max(0, overlap_end - overlap_start)
+
+            if overlap_duration > 0:
+                # Нормализуем длительность перекрытия
+                coverage = overlap_duration / seg_duration
+                speaker_stats[speaker] += coverage
+
+        # Выбираем говорящего с максимальным покрытием
+        if speaker_stats:
+            best_speaker = max(speaker_stats, key=speaker_stats.get)
+            coverage_percent = speaker_stats[best_speaker] * 100
+        else:
+            best_speaker = "UNKNOWN"
+            coverage_percent = 0
+
+        # Фильтр минимального покрытия (50%)
+        if coverage_percent < 50:
+            best_speaker = "UNKNOWN"
+
+        final_result.append({
+            "speaker": best_speaker,
+            "start": seg_start,
+            "end": seg_end,
+            "text": segment['text'],
+            "coverage": f"{coverage_percent:.1f}%"
+        })
+
+    # 4. Объединение последовательных реплик одного говорящего
+    merged_result = []
+    current_speaker = None
+    current_text = []
+    current_start = 0
+    current_end = 0
+
+    for res in final_result:
+        if res['speaker'] == current_speaker:
+            current_text.append(res['text'])
+            current_end = res['end']
+        else:
+            if current_speaker is not None:
+                merged_result.append({
+                    "speaker": current_speaker,
+                    "start": current_start,
+                    "end": current_end,
+                    "text": ' '.join(current_text)
+                })
+            current_speaker = res['speaker']
+            current_text = [res['text']]
+            current_start = res['start']
+            current_end = res['end']
+
+    # Добавляем последнюю реплику
+    if current_text:
+        merged_result.append({
+            "speaker": current_speaker,
+            "start": current_start,
+            "end": current_end,
+            "text": ' '.join(current_text)
+        })
+
+    # 5. Вывод результата
+    print("\nТранскрипция с диаризацией:")
+    transcription = ""
+    for i, res in enumerate(merged_result, 1):
+        result_description = f"{i}. [{res['speaker']}] ({res['start']:.1f}-{res['end']:.1f}): {res['text']}"
+        print(result_description)
+        transcription += result_description
+
+    os.remove("temp_mono.wav")
+
+    analysis = analyze_transcription(transcription)
+
+    return transcription, analysis, None

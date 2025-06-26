@@ -4,7 +4,7 @@ import time
 import threading
 from datetime import datetime
 from flask import Flask, render_template, request, jsonify, send_from_directory
-from utils import process_audio_transcription, create_docx_document
+from utils import process_audio_transcription, create_docx_document, transcription_with_diarization_pipeline
 
 app = Flask(__name__)
 app.config['UPLOAD_FOLDER'] = os.path.join(os.path.dirname(__file__), '..', 'recordings')
@@ -49,7 +49,9 @@ def process_transcription_async(audio_path, filename):
         }
         
         # Обработка транскрибации
-        transcription, analysis, error = process_audio_transcription(audio_path)
+        # transcription, analysis, error = process_audio_transcription(audio_path)
+
+        transcription, analysis, error = transcription_with_diarization_pipeline(audio_path)
         
         if error:
             processing_status[filename] = {
@@ -199,6 +201,8 @@ def save_recording():
 @app.route('/transcription_status/<filename>')
 def transcription_status(filename):
     """Получение статуса обработки транскрибации"""
+    print(filename)
+    print(processing_status)
     if filename in processing_status:
         return jsonify(processing_status[filename])
     else:
@@ -239,4 +243,4 @@ if __name__ == '__main__':
     print("🌐 Запуск Flask приложения...")
     print("Приложение будет доступно по адресу: http://127.0.0.1:5000")
     print("Нажмите Ctrl+C для остановки")
-    app.run(debug=True, port=5000, host='127.0.0.1')
+    app.run(debug=False, port=5000, host='127.0.0.1')
