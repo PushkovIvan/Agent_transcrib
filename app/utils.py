@@ -19,7 +19,7 @@ from collections import defaultdict
 from pyannote.core import Annotation, Segment
 
 # Конфигурация
-PATH_TO_CONFIG = "C:/Users/Huawei/Desktop/test_voice_assistant/voice_assistant_app/Agent_transcrib/models/diarization_config.yaml"  # Замените на реальный путь до конфигурации диаризатора
+PATH_TO_CONFIG = "/Users/ivan/develop/Work/transcrib/agent_transcrib/models/diarization_config.yaml"  # Замените на реальный путь до конфигурации диаризатора
 OUTPUT_RTTM = "result.rttm"  # Файл для результатов диаризации
 
 
