@@ -5,6 +5,7 @@ import threading
 from datetime import datetime
 from flask import Flask, render_template, request, jsonify, send_from_directory
 from utils import process_audio_transcription, create_docx_document, transcription_with_diarization_pipeline
+import json
 
 app = Flask(__name__)
 app.config['UPLOAD_FOLDER'] = os.path.join(os.path.dirname(__file__), '..', 'recordings')
@@ -22,22 +23,46 @@ print(f"📁 Временная папка: {os.path.abspath(app.config['TEMP_FO
 # Словарь для отслеживания статуса обработки
 processing_status = {}
 
+STATUS_FILE = os.path.join(os.path.dirname(__file__), 'processing_status.json')
+
 def cleanup_old_files():
-    """Очистка старых временных файлов"""
+    """Очистка старых временных файлов (старше 1 часа)."""
     try:
         now = time.time()
         for filename in os.listdir(app.config['TEMP_FOLDER']):
             filepath = os.path.join(app.config['TEMP_FOLDER'], filename)
-            if os.path.getmtime(filepath) < now - 3600:  # Удаляем файлы старше 1 часа
+            if os.path.getmtime(filepath) < now - 3600:
                 try:
                     os.remove(filepath)
-                except:
-                    continue
+                except Exception as e:
+                    app.logger.warning(f"Не удалось удалить файл {filepath}: {str(e)}")
     except Exception as e:
         app.logger.error(f"Cleanup error: {str(e)}")
 
+def save_statuses_to_file():
+    try:
+        with open(STATUS_FILE, 'w', encoding='utf-8') as f:
+            json.dump(processing_status, f, ensure_ascii=False, indent=2)
+    except Exception as e:
+        app.logger.error(f"Ошибка при сохранении статусов: {str(e)}")
+
+def load_statuses_from_file():
+    global processing_status
+    try:
+        if os.path.exists(STATUS_FILE):
+            with open(STATUS_FILE, 'r', encoding='utf-8') as f:
+                loaded = json.load(f)
+                # Сброс зависших статусов
+                for k, v in loaded.items():
+                    if v.get('status') == 'processing':
+                        v['status'] = 'not_processed'
+                        v['progress'] = 'Файл ожидает обработки (был прерван)'
+                processing_status.update(loaded)
+    except Exception as e:
+        app.logger.error(f"Ошибка при загрузке статусов: {str(e)}")
+
 def process_transcription_async(audio_path, filename):
-    """Асинхронная обработка транскрибации"""
+    """Асинхронная обработка транскрибации и анализа аудио."""
     try:
         processing_status[filename] = {
             'status': 'processing',
@@ -47,12 +72,8 @@ def process_transcription_async(audio_path, filename):
             'doc_path': None,
             'error': None
         }
-        
-        # Обработка транскрибации
-        # transcription, analysis, error = process_audio_transcription(audio_path)
-
+        save_statuses_to_file()
         transcription, analysis, error = transcription_with_diarization_pipeline(audio_path)
-        
         if error:
             processing_status[filename] = {
                 'status': 'error',
@@ -62,13 +83,11 @@ def process_transcription_async(audio_path, filename):
                 'doc_path': None,
                 'error': error
             }
+            save_statuses_to_file()
             return
-        
-        # Создание документа Word
         doc_path = None
         if transcription:
             doc_path = create_docx_document(transcription, analysis, audio_path)
-        
         processing_status[filename] = {
             'status': 'completed',
             'progress': 'Обработка завершена',
@@ -77,7 +96,7 @@ def process_transcription_async(audio_path, filename):
             'doc_path': doc_path,
             'error': None
         }
-        
+        save_statuses_to_file()
     except Exception as e:
         processing_status[filename] = {
             'status': 'error',
@@ -87,6 +106,8 @@ def process_transcription_async(audio_path, filename):
             'doc_path': None,
             'error': str(e)
         }
+        save_statuses_to_file()
+        app.logger.error(f"Ошибка в process_transcription_async: {str(e)}")
 
 @app.route('/')
 def index():
@@ -172,6 +193,7 @@ def save_recording():
         )
         thread.daemon = True
         thread.start()
+        save_statuses_to_file()
         
         return jsonify({
             'status': 'success',
@@ -206,6 +228,17 @@ def transcription_status(filename):
     if filename in processing_status:
         return jsonify(processing_status[filename])
     else:
+        # Fallback: если файл есть на диске, но нет статуса
+        file_path = os.path.join(app.config['UPLOAD_FOLDER'], filename)
+        if os.path.exists(file_path):
+            return jsonify({
+                'status': 'not_processed',
+                'progress': 'Файл ожидает обработки',
+                'transcription': None,
+                'analysis': None,
+                'doc_path': None,
+                'error': None
+            })
         return jsonify({
             'status': 'not_found',
             'progress': 'Файл не найден',
@@ -223,21 +256,53 @@ def get_recording(filename):
 def get_document(filename):
     """Скачивание документа Word"""
     try:
-        # Ищем документ в папке recordings
-        doc_filename = filename.replace('.mp3', '_transcription.docx')
-        doc_path = os.path.join(app.config['UPLOAD_FOLDER'], doc_filename)
-        
+        doc_path = os.path.join(app.config['UPLOAD_FOLDER'], filename)
+        abs_dir = os.path.abspath(app.config['UPLOAD_FOLDER'])
         if os.path.exists(doc_path):
             return send_from_directory(
-                app.config['UPLOAD_FOLDER'],
-                doc_filename,
+                abs_dir,
+                filename,
                 as_attachment=True,
-                download_name=doc_filename
+                download_name=filename
             )
         else:
             return jsonify({'error': 'Document not found'}), 404
     except Exception as e:
         return jsonify({'error': str(e)}), 500
+
+@app.route('/api/recordings', methods=['GET'])
+def api_recordings():
+    """
+    Получить список всех записей и их статусов для фронтенда.
+    Возвращает: [{filename, status, progress, doc_path, error, created_at, size}]
+    """
+    try:
+        recordings_dir = app.config['UPLOAD_FOLDER']
+        files = [f for f in os.listdir(recordings_dir) if f.endswith('.mp3')]
+        result = []
+        for f in sorted(files, reverse=True):
+            path = os.path.join(recordings_dir, f)
+            stat = os.stat(path)
+            status = processing_status.get(f, {}).get('status', 'not_processed')
+            progress = processing_status.get(f, {}).get('progress', '')
+            doc_path = processing_status.get(f, {}).get('doc_path', None)
+            error = processing_status.get(f, {}).get('error', None)
+            result.append({
+                'filename': f,
+                'status': status,
+                'progress': progress,
+                'doc_path': doc_path,
+                'error': error,
+                'created_at': datetime.fromtimestamp(stat.st_mtime).strftime('%Y-%m-%d %H:%M:%S'),
+                'size': stat.st_size
+            })
+        return jsonify({'status': 'success', 'recordings': result})
+    except Exception as e:
+        app.logger.error(f"Ошибка получения списка записей: {str(e)}")
+        return jsonify({'status': 'error', 'message': str(e)}), 500
+
+# Загрузка статусов при старте
+load_statuses_from_file()
 
 if __name__ == '__main__':
     print("🌐 Запуск Flask приложения...")

@@ -136,7 +136,8 @@
                     .then(response => response.json())
                     .then(data => {
                         if (data.doc_path) {
-                            const docFilename = data.doc_path.split('/').pop();
+                            // Исправлено: поддержка путей с / и \
+                            const docFilename = data.doc_path.split(/[/\\\\]/).pop();
                             window.open(`/documents/${docFilename}`, '_blank');
                         } else {
                             alert('Документ еще не готов или произошла ошибка');
