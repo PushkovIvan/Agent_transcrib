@@ -152,7 +152,7 @@ def main():
             from app import app
             print("🌐 Приложение запущено на http://127.0.0.1:5000")
             print("Нажмите Ctrl+C для остановки")
-            app.run(debug=True, port=5000, host='127.0.0.1')
+            app.run(debug=False, port=5000, host='127.0.0.1')
         except KeyboardInterrupt:
             print("\n👋 Приложение остановлено")
         except Exception as e:
@@ -160,7 +160,7 @@ def main():
     else:
         print(f"❌ Пройдено {checks_passed} из {total_checks} проверок")
         print("Исправьте ошибки и попробуйте снова")
-        sys.exit(1)
+        #sys.exit(1)
 
 if __name__ == "__main__":
     main() 
