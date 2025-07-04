@@ -73,21 +73,19 @@ def process_transcription_async(audio_path, filename):
             'error': None
         }
         save_statuses_to_file()
-        transcription, analysis, error = transcription_with_diarization_pipeline(audio_path)
-        if error:
+        transcription, analysis, result = transcription_with_diarization_pipeline(audio_path)
+        if result and result.startswith('Ошибка'):
             processing_status[filename] = {
                 'status': 'error',
                 'progress': 'Ошибка обработки',
-                'transcription': None,
-                'analysis': None,
+                'transcription': transcription,
+                'analysis': analysis,
                 'doc_path': None,
-                'error': error
+                'error': result
             }
             save_statuses_to_file()
             return
-        doc_path = None
-        if transcription:
-            doc_path = create_docx_document(transcription, analysis, audio_path)
+        doc_path = result if result else None
         processing_status[filename] = {
             'status': 'completed',
             'progress': 'Обработка завершена',

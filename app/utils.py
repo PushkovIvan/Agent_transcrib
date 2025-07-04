@@ -211,10 +211,10 @@ def create_docx_document(transcription_text, analysis_text, filename):
         doc_path = os.path.join(recordings_dir, doc_filename)
         doc.save(doc_path)
         print(f"Документ сохранен: {doc_path}")
-        return doc_path
+        return doc_path, None
     except Exception as e:
         print(f"Ошибка при создании документа: {str(e)}")
-        return None
+        return None, str(e)
 
 def process_audio_transcription(audio_path):
     """Основная функция обработки аудио для транскрибации."""
@@ -393,4 +393,7 @@ def transcription_with_diarization_pipeline(audio_path):
         transcription += result_description
     os.remove(temp_wav)
     analysis = analyze_transcription(transcription)
-    return transcription, analysis, None
+    docx_path, docx_error = create_docx_document(transcription, analysis, audio_path)
+    if docx_error:
+        return transcription, analysis, f"Ошибка при создании docx: {docx_error}"
+    return transcription, analysis, docx_path

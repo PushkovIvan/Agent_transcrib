@@ -5,4 +5,4 @@ secretsPaths:
   certChain: ../cert/cacrt
 
 token:
-  gigachat:
+  gigachat: 
